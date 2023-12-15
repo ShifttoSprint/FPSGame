@@ -1,11 +1,17 @@
 import pygame,random
 from pygame.locals import *
 import pyganim
+from Enemy import *
 from math import *
+
 pygame.init()
 window=pygame.display.set_mode((600,400))
 isRunning=True
 clock=pygame.time.Clock()
+#TODO
+#1. Clean up the code, and put stuff into objects
+#2. Figure out translation of enemies - Done
+#3. Maybe add a menu and health bar and stuff
 
 def count_fps():
     global FPS
@@ -29,12 +35,19 @@ class Timer:
     def timing(self):
         self.seconds=int((pygame.time.get_ticks()-self.start)/1000)
         return self.seconds
+    def timing_with_precision(self, precision):
+        self.seconds=int((pygame.time.get_ticks()-self.start)/precision)
+        return self.seconds
     def reset(self):
         self.start=int(pygame.time.get_ticks())
 
 myTimer=Timer()
 font=pygame.font.SysFont("Verdana.ttf", 20)
 pos = []
+screen_size = window.get_size()
+scrposx = -200
+scrposy = -200
+pygame.mouse.set_pos([screen_size[0]/2, screen_size[1]/2])
 bitmap=pygame.image.load("forest.png").convert_alpha()
 bitmap=pygame.transform.scale(bitmap,(1000,800))
 window.blit(bitmap,(-200,-200))
@@ -43,162 +56,136 @@ gun=pygame.transform.scale(gun,(108,127))
 guny=300
 fire=pyganim.PygAnimation([("pistolfire/frame_1.gif",200),("pistolfire/frame_2.gif",100),("pistolfire/frame_3.gif",100),("pistolfire/frame_4.gif",200),("pistolfire/frame_5.gif",200)])
 fire.loop=False
-#pygame.mouse.set_visible(False)
+pygame.event.set_grab(True)
+pygame.mouse.set_visible(False)
+
 pistolsound=pygame.mixer.Sound("sounds/pistolsound.wav")
-enemy=pyganim.PygAnimation([("enemy/0.png",150),("enemy/1.png",150),('enemy/2.png',150),('enemy/3.png',150),('enemy/4.png',150),('enemy/5.png',150),('enemy/6.png',150),('enemy/7.png',150),('enemy/8.png',150)])
 origsize=[50,80]
 size=[50,80]
 WalkTime=Timer()
-enemy.loop=False
+
 def Walking(sze,factor):
     if WalkTime.timing()==1:
         sze[0]+=factor
         sze[1]+=factor
         WalkTime.reset()
+
 enmyspawn=False
 enplist=set()
-spawn=False
+spawn=True
 spawned=[]
+delta_pos = [0,0]
 keepblit=True
 shot=pygame.Surface((18,20))
-enemies = [enemy, enemy, enemy, enemy]
+enemies = [Enemy(), Enemy(), Enemy(), Enemy()]
 shot.fill((0,0,0))
 shotx=453
 shoty=280
+oldpos=[]
+MouseMovementTimer = Timer()
+enemy_colliders = list()
+scale = -2
+global gun_collider
+gun_collider = pygame.Rect(299, 275, 5, 5)
 while isRunning:
-    for event in pygame.event.get():
-        if event.type==pygame.QUIT: # Checks if Quit Pressed
-            isRunning=False
-            break
-        if event.type==pygame.MOUSEMOTION: #Checks Mouse movement
-            pos=posfinder() #  Finds Cursor Position
-            if pos[0]<300 : #Sets Background Blit Position
-                scrposx = -pos[0]+110
-                shotx=ceil((pos[0]*0.55)+287.5)
-            elif pos[0]==300:   # "
-                scrposx = -200
-            elif pos[0]>300 :   # "
-                scrposx = (-pos[0]+100)-10
-            if pos[1]>200 : # "
-                scrposy = -pos[1]-10
-            elif pos[1]==200:   # "
-                scrposy = -200
-            elif pos[1]<200 :   # "
-                scrposy = -pos[1] + 10
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-            pygame.quit()
-        if event.type==pygame.MOUSEBUTTONDOWN: # Gets Mouse Clicks
-            print(posfinder())
-            gunx,guny = posfinder()
-            for i in range(0,len(spawned)):
-                enemyCurrentW,enemyCurrentH = size#[0] - origsize[0],size[1] - origsize[1]
-                xLB = spawned[i][0]
-                xHB = spawned[i][0]+enemyCurrentW
-                yLB = spawned[i][1]
-                yHB = spawned[i][1]+enemyCurrentH
-                if xLB<gunx<xHB and yLB<guny<yHB:
-                    del spawned[i]
-                    del enemies[i]
-                    #enemies.append(enemy)
-            fire.stop()
-            fire.play() # Pistol firing Anim
-            pistolsound.play()
-            pygame.display.update()
-        if pygame.mouse.get_focused(): # Gets if Cursor in Screen
-            scrnout=False
-        elif not pygame.mouse.get_focused(): #Gets if Cursor out of screen
-            scrnout=True
-            fire.stop()
-    if pos[0]<10:                           #Sets Mouse Cursor Boundaries
-        pygame.mouse.set_pos(10,pos[1])
-    elif pos[0]>590:                        # "
-        pygame.mouse.set_pos(590,pos[1])
-    if pos[1]<10:                           # "
-        pygame.mouse.set_pos(pos[0],10)
-    elif pos[1]>390:                        # "
-        pygame.mouse.set_pos(pos[0],390)
-    if scrposx<-400:               #Camera Move Effect Boundaries
-        scrposx=-400
-    elif scrposx>0:                 # "
-        scrposx=0
-    if scrposy<-400:                # "
-        scrposy=-400
-    elif scrposy>0:                 # "
-        scrposy=0
-    myTimer.timing() # Timer Ticks
-    WalkTime.timing()  #Timing the Walk
-    ensurf=pygame.Surface((1000,800),HWSURFACE|SRCALPHA) # Creates Surface To blit Enemy Onto
-    window.blit(bitmap,(scrposx,scrposy))
-    Walking(size,4)
-    print("This is size",size)
-    if not enmyspawn : # returns list of random enemy pos
-        enpos=EnemyPos()
-        enplist.add(enpos)
-        if len(enplist)>=4: # Checks if Enemy Positions are Four
-            enmyspawn=True
-            spawn=True
-    if spawn: #checks if enemies need to be spawned
-        if len(enplist)>0 and myTimer.timing() % 5 == 0 and len(spawned)<4:
-            elem=enplist.pop()
-            spawned.append(elem)
-            print(elem)
-            print (spawned)
-        if len(enplist)==0:
-            enmyspawn=False
-            spawn=False
-    if keepblit and len(spawned)>0: #Checks if Enemies need to Be blit
-        if len(spawned)== 4 :
-            enemies[0].smoothscale((size[0],size[1]))
-            enemies[1].smoothscale((size[0], size[1]))
-            enemies[2].smoothscale((size[0], size[1]))
-            enemies[3].smoothscale((size[0], size[1]))
-            enemies[0].blit(ensurf,spawned[0])
-            enemies[1].blit(ensurf,spawned[1])
-            enemies[2].blit(ensurf,spawned[2])
-            enemies[3].blit(ensurf,spawned[3])
-            enemies[0].play()
-            enemies[1].play()
-            enemies[2].play()
-            enemies[3].play()
-        elif len(spawned)==3:
-            enemies[0].smoothscale((size[0], size[1]))
-            enemies[1].smoothscale((size[0], size[1]))
-            enemies[2].smoothscale((size[0], size[1]))
-            enemies[0].blit(ensurf,spawned[0])
-            enemies[1].blit(ensurf,spawned[1])
-            enemies[2].blit(ensurf,spawned[2])
-            enemies[0].play()
-            enemies[1].play()
-            enemies[2].play()
-        elif len(spawned)==2:
-            enemies[0].smoothscale((size[0], size[1]))
-            enemies[1].smoothscale((size[0], size[1]))
-            enemies[0].blit(ensurf,spawned[0])
-            enemies[1].blit(ensurf,spawned[1])
-            enemies[0].play()
-            enemies[1].play()
-        elif len(spawned)==1:
-            enemies[0].smoothscale((size[0], size[1]))
-            enemies[0].blit(ensurf,spawned[0])
-            enemies[0].play()
-    ensurf.blit(shot, (shotx, shoty))
-    window.blit(gun, (248, guny))
-    window.blit(ensurf,(scrposx,scrposy))
+    try:
+        for event in pygame.event.get():
+            if event.type==pygame.QUIT: # Checks if Quit Pressed
+                isRunning=False
+                break
+            if event.type==pygame.MOUSEMOTION: #Checks Mouse movement
+                
+                delta_pos = pygame.mouse.get_rel() #Get Direction of mouse movement
+                delta_pos = [float(delta_pos[0]), float(delta_pos[1])] #Floating the values for precision
+                scrposx+=delta_pos[0]*scale #Setting screen X axis movement
+                scrposy+=delta_pos[1]*scale #Setting screen Y axis movement
+                
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                isRunning = False
+            if event.type==pygame.MOUSEBUTTONDOWN: # Gets Mouse Clicks
+                for i in range(len(enemy_colliders)):
+                    if enemy_colliders[i].colliderect(gun_collider):
+                        del enemy_colliders[i]
+                        del enemies[i]
+                        break
+                        
+                """for i in range(0,len(spawned)):
+                    enemyCurrentW,enemyCurrentH = size#[0] - origsize[0],size[1] - origsize[1]
+                    xLB = spawned[i][0]
+                    xHB = spawned[i][0]+enemyCurrentW
+                    yLB = spawned[i][1]
+                    yHB = spawned[i][1]+enemyCurrentH
+                    if xLB<gunx<xHB and yLB<guny<yHB:
+                        del spawned[i]
+                        del enemies[i]
+                        #enemies.append(enemy)"""
+                fire.stop()
+                fire.play() # Pistol firing Anim
+                pistolsound.play()
+                pygame.display.update()
+            if pygame.mouse.get_focused(): # Gets if Cursor in Screen
+                scrnout=False
+            elif not pygame.mouse.get_focused(): #Gets if Cursor out of screen
+                scrnout=True
+        enemy_colliders.clear()    
+        if scrposx<-400:               #Camera Move Effect Boundaries
+            scrposx=-400
+        elif scrposx>0:                 # "
+            scrposx=0
+        if scrposy<-400:                # "
+            scrposy=-400
+        elif scrposy>0:                 # "
+            scrposy=0
+        myTimer.timing() # Timer Ticks
+        WalkTime.timing()  #Timing the Walk
+        pos=posfinder() #  Finds Cursor Position
+        if pos==oldpos:
+            if MouseMovementTimer.timing() == 3:
+                scrnout = True
+        else:
+            MouseMovementTimer.reset()
+            scrnout = False
+        oldpos=pos
+        ensurf=pygame.Surface((1000,800),HWSURFACE|SRCALPHA) # Creates Surface To blit Enemy Onto
+        window.blit(bitmap,(scrposx,scrposy))
+        Walking(size,4)
+        #print("This is size",size)
+        
+        if len(enemies)>0: #Checks if Enemies need to Be blit
+            for i in range(len(enemies)):
+                enemies[i].anim.smoothscale((size[0],size[1]))
+                enemies[i].anim.blit(ensurf,enemies[i].pos)
+                enemies[i].update_collider(scrposx,scrposy)
+                pygame.draw.rect(window, (255, 0, 0), enemies[i].collider, 2)
+                enemy_colliders.append(enemies[i].collider)
+                enemies[i].anim.play()
+                
+        ensurf.blit(shot, (shotx, shoty))
+        window.blit(ensurf,(scrposx,scrposy))
+        window.blit(gun, (248, guny))
+        pygame.draw.rect(window, (255, 255, 255), gun_collider, 2)
 
-    fire.blit(window, (230, 240))
-    del ensurf
-    if scrnout:
-        guny+=1
-    elif not scrnout:
-        guny-=1
-    if guny<275:
-        guny=275
-    elif guny>400:
-        guny=400
-    count_fps()
-    Fps=font.render(str(FPS),True,(255,255,255))
-    window.blit(Fps,(0,0))
-    clock.tick(200)
-    pygame.display.update()
+        fire.blit(window, (230, 240))
+        
+        del ensurf
+        if scrnout:
+            guny+=1
+        elif not scrnout:
+            guny-=1
+        if guny<275:
+            guny=275
+        elif guny>400:
+            guny=400
+        count_fps()
+        Fps=font.render(str(FPS),True,(255,255,255))
+        window.blit(Fps,(0,0))
+        clock.tick(200)
+        pygame.display.update()
+    except Exception as e:
+        print(e)
+        if str(e) == "video system not initialized":
+            exit()
+        pygame.quit()
+pygame.event.set_grab(False)
 pygame.quit()
 
